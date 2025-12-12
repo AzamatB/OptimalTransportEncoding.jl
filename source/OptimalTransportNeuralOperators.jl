@@ -1,5 +1,6 @@
 using GeometryBasics
 using FileIO
+using LinearAlgebra
 using MeshIO
 using NNlib
 using Statistics
@@ -80,13 +81,75 @@ end
 # extract vertices from a mesh as a 3×n Matrix{T}
 function extract_vertices(mesh::Mesh)
     T = Float32
-    vertices = mesh.vertex_attributes.position
+    vertices = mesh.position
     num_points = length(vertices)
     dim = length(first(vertices))
     points = Matrix{T}(undef, dim, num_points)
     eachcol(points) .= vertices
     point_cloud = EuclideanPointCloud(points)
     return point_cloud
+end
+
+# compute vertex normals and weights for a 3D mesh composed of triangular faces, which are
+# computed by averaging the normals of adjacent faces, weighted by the area of those faces.
+function compute_mesh_vertex_normals(
+    mesh::Mesh{3,Float32,FaceType,(:position,),Tuple{Vector{Point{3,Float32}}}}
+) where {FaceType<:NgonFace{3}}
+    T = Float32
+    faces = mesh.faces
+    vertices = mesh.position
+    num_vertices = length(vertices)
+    vertex_normals = zeros(T, 3, num_vertices)
+    vertex_weights = zeros(T, num_vertices)
+
+    @inbounds for n in eachindex(faces)
+        face = faces[n]
+        i₁ = face[1]
+        i₂ = face[2]
+        i₃ = face[3]
+
+        vertex₁ = vertices[i₁]
+        vertex₂ = vertices[i₂]
+        vertex₃ = vertices[i₃]
+
+        edge₁ = vertex₂ - vertex₁
+        edge₂ = vertex₃ - vertex₁
+        normal = edge₁ × edge₂
+        (normal_x, normal_y, normal_z) = normal
+
+        vertex_normals[1,i₁] += normal_x
+        vertex_normals[2,i₁] += normal_y
+        vertex_normals[3,i₁] += normal_z
+
+        vertex_normals[1,i₂] += normal_x
+        vertex_normals[2,i₂] += normal_y
+        vertex_normals[3,i₂] += normal_z
+
+        vertex_normals[1,i₃] += normal_x
+        vertex_normals[2,i₃] += normal_y
+        vertex_normals[3,i₃] += normal_z
+
+        # ‖normal‖ = 2⋅(area of face)
+        double_area = norm(normal)
+        vertex_weights[i₁] += double_area
+        vertex_weights[i₂] += double_area
+        vertex_weights[i₃] += double_area
+    end
+
+    # normalize vertex weights to sum to 1
+    Σweight⁻¹ = inv(sum(vertex_weights))
+    @assert isfinite(Σweight⁻¹)
+    vertex_weights .*= Σweight⁻¹
+
+    # normalize each vertex normal to unit length
+    @inbounds for normal in eachcol(vertex_normals)
+        len = norm(normal)
+        # avoid division by zero
+        len += iszero(len)
+        # view mutates the underlying array
+        normal ./= len
+    end
+    return (vertex_normals, vertex_weights)
 end
 
 # Computes pairwise squared Euclidean distance between two point clouds.
@@ -216,7 +279,8 @@ end
 
 point_cloud: (d × m) features on latent grid.
 ot_plan:     (n × m) optimal transport plan from physical to latent spaces.
-Returns point_cloud_transported: (d × n) features on physical surface.
+Returns point_cloud_transported: (d × n) features on physical surface, i. e. what the latent
+grid looks like after being bent/warped to match the surface of the input physical object.
 """
 function pullback_from_latent(
     point_cloud::LatentPointCloud{M},                           # (d × m)
