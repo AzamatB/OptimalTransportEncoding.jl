@@ -30,19 +30,23 @@ end
 
 abstract type AbstractPointCloud{M<:DenseMatrix{Float32}} end
 
-struct EuclideanPointCloud{M<:DenseMatrix{Float32}} <: AbstractPointCloud{M}
+struct OrientedSurfaceMeasure{M<:DenseMatrix{Float32}} <: AbstractPointCloud{M}
     num_points::Int
     points::M
+    normals::Matrix{Float32}
+    weights::Vector{Float32}
 end
 
-function EuclideanPointCloud(points::M) where {M<:DenseMatrix{Float32}}
+function OrientedSurfaceMeasure(points::M) where {M<:DenseMatrix{Float32}}
     num_points = size(points, 2)
-    return EuclideanPointCloud{M}(num_points, points)
+    return OrientedSurfaceMeasure{M}(num_points, points)
 end
 
 struct LatentPointCloud{M<:DenseMatrix{Float32},G<:LatentGrid} <: AbstractPointCloud{M}
     num_points::Int
     points::M
+    normals::Matrix{Float32}
+    weights::Vector{Float32}
     grid::G
 end
 
