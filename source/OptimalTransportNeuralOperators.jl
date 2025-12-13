@@ -176,17 +176,16 @@ function LatentOrientedSurfaceMeasure{M}(torus::Torus) where {M<:DenseMatrix{Flo
     return LatentOrientedSurfaceMeasure(num_points, points_mat, normals_mat, weights_gpu, torus)
 end
 
-struct OptimalTransportPlan{M<:DenseMatrix{Float32},G<:LatentGrid}
+struct OptimalTransportPlan{M<:DenseMatrix{Float32}}
     plan::M
-    grid::G
 end
 
 function OptimalTransportPlan(
-    xs::OrientedSurfaceMeasure{M}, ys::LatentOrientedSurfaceMeasure{M,G}, num_iters::Int=100
-) where {M<:DenseMatrix{Float32},G<:LatentGrid}
+    xs::OrientedSurfaceMeasure{M}, ys::LatentOrientedSurfaceMeasure{M}, num_iters::Int=100
+) where {M<:DenseMatrix{Float32}}
     dists = pairwise_squared_euclidean_distance(xs.points, ys.points)
     plan = compute_optimal_transport_plan(dists, xs.weights, ys.weights, num_iters)
-    return OptimalTransportPlan(plan, ys.grid)
+    return OptimalTransportPlan(plan)
 end
 
 """
@@ -244,8 +243,8 @@ function compute_optimal_transport_plan(
 end
 
 # compute pairwise squared Euclidean distance between two point clouds.
-# xs: (d, n) - latent points
-# ys: (d, m) - physical grid points
+# xs: (d, n) - physical points
+# ys: (d, m) - latent points
 # return: (n, m) distance matrix
 function pairwise_squared_euclidean_distance(
     xs::M,                                      # d × n
@@ -266,10 +265,10 @@ function pairwise_squared_euclidean_distance(
 end
 
 function estimate_plan_convergence(
-    ot_plan::OptimalTransportPlan{M,G},                        # (n × m)
+    ot_plan::OptimalTransportPlan{M},                          # (n × m)
     measure::OrientedSurfaceMeasure{M},                        # (d × n)
-    measure_l::LatentOrientedSurfaceMeasure{M,G}               # (d × m)
-) where {M<:DenseMatrix{Float32},G<:LatentGrid}
+    measure_l::LatentOrientedSurfaceMeasure{M}                 # (d × m)
+) where {M<:DenseMatrix{Float32}}
     plan = ot_plan.plan                                        # (n × m)
     mu = measure.weights                                       # (n)
     nu = measure_l.weights                                     # (m)
@@ -306,23 +305,23 @@ end
 
 # for each point in the destination point cloud, find and assign the index of the closest
 # point in the source point cloud
-function assign_points(dists::DenseMatrix{Float32})   # (n x m)
+function assign_points(dists::AbstractMatrix{Float32})   # (n x m)
     index_pairs = vec(argmin(dists; dims=1))          # (m)
     indices_best = getindex.(index_pairs, 1)          # (m)
     return indices_best
 end
 
 """
-    pushforward_to_physical(measure::OrientedSurfaceMeasure, ot_plan::OptimalTransportPlan)
+    pushforward_to_latent(measure::OrientedSurfaceMeasure, ot_plan::OptimalTransportPlan)
 
 measure: (d × n) features on the physical surface.
 ot_plan: (n × m) optimal transport plan from physical to latent spaces.
 Returns measure_t: (d × m) features on latent grid.
 """
-function pushforward_to_physical(
+function pushforward_to_latent(
     measure::OrientedSurfaceMeasure{M},                             # (d × n)
-    ot_plan::OptimalTransportPlan{M,G}                              # (n × m)
-) where {M<:DenseMatrix{Float32},G<:LatentGrid}
+    ot_plan::OptimalTransportPlan{M}                                # (n × m)
+) where {M<:DenseMatrix{Float32}}
     plan = ot_plan.plan
     points = measure.points
 
@@ -343,6 +342,6 @@ function encode(
     measure_l::LatentOrientedSurfaceMeasure{M}           # (d × m)
 ) where {M<:DenseMatrix{Float32}}
     ot_plan = OptimalTransportPlan(measure, measure_l)   # (n × m)
-    (measure_t, encoding_indices, decoding_indices) = pushforward_to_physical(measure, ot_plan)
+    (measure_t, encoding_indices, decoding_indices) = pushforward_to_latent(measure, ot_plan)
     return (measure_t, encoding_indices, decoding_indices, ot_plan)
 end
