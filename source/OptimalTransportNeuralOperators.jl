@@ -189,56 +189,59 @@ function OptimalTransportPlan(
 end
 
 """
-    compute_optimal_transport_plan(cost_mat, mu, nu, num_iters)
+    compute_optimal_transport_plan(costs, mu, nu, num_iters)
 
 Compute an entropic regularized optimal transport plan between discrete measures mu (length n)
 and nu (length m) given a cost matrix (n×m) using the Log-Domain Sinkhorn-Knopp algorithm.
 
 Arguments:
-- cost_mat: DenseMatrix{Float32} of size (n, m)
+- costs: DenseMatrix{Float32} of size (n, m)
 - mu: Source marginals (vector of length n)
 - nu: Target marginals (vector of length m)
 - num_iters: Number of iterations
 
-Returns P (n×m) such that P >= 0, P*1 ≈ mu, P'*1 ≈ nu.
+Returns P (n × m) such that P >= 0, P*1 ≈ mu, P'*1 ≈ nu.
 """
 function compute_optimal_transport_plan(
-    cost_mat::DenseMatrix{Float32}, mu::V, nu::V, num_iters::Int
+    costs::DenseMatrix{Float32},         # (n × m)
+    mu::V,                               # (n)
+    nu::V,                               # (m)
+    num_iters::Int
 ) where {V<:DenseVector{Float32}}
     T = Float32
     ε = T(0.005) # relative (to the mean cost) entropy regularization parameter
-    (n, m) = size(cost_mat)
+    (n, m) = size(costs)
 
     # validate dimensions
-    @assert length(mu) == n "Source marginal dimension (mu) does not match cost_mat rows."
-    @assert length(nu) == m "Target marginal dimension (nu) does not match cost_mat columns."
+    @assert length(mu) == n "Source marginal dimension (mu) does not match costs rows."
+    @assert length(nu) == m "Target marginal dimension (nu) does not match costs columns."
 
     # target log-marginals: take log, and reshape for broadcasting
-    log_mu = reshape(log.(mu), n, 1)   # (n × 1) to broadcast against columns
-    log_nu = reshape(log.(nu), 1, m)   # (1 × m) to broadcast against rows
+    log_mu = reshape(log.(mu), n, 1)     # (n × 1) to broadcast against columns
+    log_nu = reshape(log.(nu), 1, m)     # (1 × m) to broadcast against rows
 
     # initialize dual variables (potentials)
-    f = zero(log_mu)   # (n × 1)
-    g = zero(log_nu)   # (1 × m)
+    f = zero(log_mu)                     # (n × 1)
+    g = zero(log_nu)                     # (1 × m)
 
-    # effective entropy regularization: ε_eff = ε * mean(cost_mat)
-    c = -1.0f0 / (ε * mean(cost_mat))
-    # kernel in log domain: logK = -cost_mat / (ε * mean(cost_mat))
-    logK = c .* cost_mat
+    # effective entropy regularization: ε_eff = ε * mean(costs)
+    c = -1.0f0 / (ε * mean(costs))
+    # kernel in log domain: logK = -costs / ε_eff
+    logK = c .* costs
 
     for _ in 1:num_iters
         # update f (row normalization) to match marginal mu
         S_f = g .+ logK                  # (1 × m) .+ (n × m) -> (n × m)
-        lse_f = logsumexp(S_f; dims=2)
-        f = log_mu .- lse_f
+        lse_f = logsumexp(S_f; dims=2)   # (n × m) -> (n × 1)
+        f = log_mu .- lse_f              # (n × 1)
 
-        # update g (column normalization) matches marginal nu
+        # update g (column normalization) to match marginal nu
         S_g = f .+ logK                  # (n × 1) .+ (n × m) -> (n × m)
-        lse_g = logsumexp(S_g; dims=1)
-        g = log_nu .- lse_g
+        lse_g = logsumexp(S_g; dims=1)   # (n × m) -> (1 × m)
+        g = log_nu .- lse_g              # (1 × m)
     end
-    # transport plan: log_P = f + g + logK; -> (n, 1) .+ (1, m) .+ (n, m) -> (n, m)
-    P = exp.(f .+ g .+ logK)
+    # transport plan: log_P = f + g + logK; => (n, 1) .+ (1, m) .+ (n, m) -> (n, m)
+    P = exp.(f .+ g .+ logK)             # (n × m)
     return P
 end
 
@@ -306,8 +309,8 @@ end
 # for each point in the destination point cloud, find and assign the index of the closest
 # point in the source point cloud
 function assign_points(dists::AbstractMatrix{Float32})   # (n x m)
-    index_pairs = vec(argmin(dists; dims=1))          # (m)
-    indices_best = getindex.(index_pairs, 1)          # (m)
+    index_pairs = vec(argmin(dists; dims=1))             # (m)
+    indices_best = getindex.(index_pairs, 1)             # (m)
     return indices_best
 end
 
