@@ -271,15 +271,15 @@ function normalize_columns(xs::AbstractMatrix{<:Real})
 end
 
 function transport(
-    points::DenseMatrix{Float32},             # (d × n)
-    plan::AbstractMatrix{Float32}             # (n × m)
+    points::DenseMatrix{Float32},         # (d × n)
+    plan::AbstractMatrix{Float32}         # (n × m)
 )
     @assert size(points, 2) == size(plan, 1)
     # normalize the transport plan columns for barycentric projection
-    plan_norm = normalize_columns(plan)       # (n × m)
+    plan_norm = normalize_columns(plan)   # (n × m)
     # perform the barycentric projection
-    points_transported = points * plan_norm   # (d × m)
-    return points_transported
+    points_t = points * plan_norm         # (d × m)
+    return points_t
 end
 
 """
@@ -287,16 +287,16 @@ end
 
 measure: (d × n) features on physical surface.
 ot_plan:     (n × m) optimal transport plan from physical to latent spaces.
-Returns point_cloud_transported: (d × m) features on latent grid.
+Returns point_cloud_t: (d × m) features on latent grid.
 """
 function pushforward_to_physical(
-    measure::OrientedSurfaceMeasure{M},                    # (d × n)
-    ot_plan::OptimalTransportPlan{M,G}                     # (n × m)
+    measure::OrientedSurfaceMeasure{M},          # (d × n)
+    ot_plan::OptimalTransportPlan{M,G}           # (n × m)
 ) where {M<:DenseMatrix{Float32},G<:LatentGrid}
     plan = ot_plan.plan
-    points_transported = transport(measure.points, plan)   # (d × m)
-    measure_transported = OrientedSurfaceMeasure(points_transported)
-    return measure_transported
+    points_t = transport(measure.points, plan)   # (d × m)
+    measure_t = OrientedSurfaceMeasure(points_t)
+    return measure_t
 end
 
 """
@@ -304,25 +304,25 @@ end
 
 measure: (d × m) features on latent grid.
 ot_plan:     (n × m) optimal transport plan from physical to latent spaces.
-Returns point_cloud_transported: (d × n) features on physical surface, i. e. what the latent
+Returns point_cloud_t: (d × n) features on physical surface, i. e. what the latent
 grid looks like after being bent/warped to match the surface of the input physical object.
 """
 function pullback_from_latent(
-    measure::LatentOrientedSurfaceMeasure{M},                           # (d × m)
-    ot_plan::OptimalTransportPlan{M}                            # (n × m)
+    measure::LatentOrientedSurfaceMeasure{M},     # (d × m)
+    ot_plan::OptimalTransportPlan{M}              # (n × m)
 ) where {M<:DenseMatrix{Float32}}
     plan = ot_plan.plan
     # transpose the transport plan to go from latent to physical
-    points_transported = transport(measure.points, plan')   # (d × n)
-    measure_transported = OrientedSurfaceMeasure(points_transported)
-    return measure_transported
+    points_t = transport(measure.points, plan')   # (d × n)
+    measure_t = OrientedSurfaceMeasure(points_t)
+    return measure_t
 end
 
 # for each point in the destination point cloud, find and assign the index of the closest
 # point in the source point cloud
 function assign_points(
-    measure_src::AbstractMeasure,       # (d x n)
-    measure_dst::AbstractMeasure        # (d x m)
+    measure_src::AbstractMeasure,              # (d x n)
+    measure_dst::AbstractMeasure               # (d x m)
 )
     dists = pairwise_squared_euclidean_distance(measure_src.points, measure_dst.points)   # (n x m)
     index_pairs = vec(argmin(dists; dims=1))   # (m)
@@ -331,12 +331,12 @@ function assign_points(
 end
 
 function compute_encoder_and_decoder(
-    measure::OrientedSurfaceMeasure{M},                               # (d × n)
-    measure_latent::LatentOrientedSurfaceMeasure{M}                   # (d × m)
+    measure::OrientedSurfaceMeasure{M},                       # (d × n)
+    measure_latent::LatentOrientedSurfaceMeasure{M}           # (d × m)
 ) where {M<:DenseMatrix{Float32}}
-    ot_plan = OptimalTransportPlan(measure, measure_latent)           # (n × m)
-    measure_transported = pushforward_to_physical(measure, ot_plan)   # (d × m)
-    encoding_indices = assign_points(measure, measure_transported)    # (m)
-    decoding_indices = assign_points(measure_transported, measure)    # (n)
-    return (encoding_indices, decoding_indices, ot_plan, measure_transported)
+    ot_plan = OptimalTransportPlan(measure, measure_latent)   # (n × m)
+    measure_t = pushforward_to_physical(measure, ot_plan)     # (d × m)
+    encoding_indices = assign_points(measure, measure_t)      # (m)
+    decoding_indices = assign_points(measure_t, measure)      # (n)
+    return (encoding_indices, decoding_indices, ot_plan, measure_t)
 end
