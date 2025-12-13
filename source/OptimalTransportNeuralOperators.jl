@@ -28,126 +28,31 @@ struct Torus <: LatentGrid
     end
 end
 
-abstract type AbstractPointCloud{M<:DenseMatrix{Float32}} end
+abstract type AbstractMeasure{M<:DenseMatrix{Float32}} end
 
-struct OrientedSurfaceMeasure{M<:DenseMatrix{Float32}} <: AbstractPointCloud{M}
+struct OrientedSurfaceMeasure{M<:DenseMatrix{Float32}} <: AbstractMeasure{M}
     num_points::Int
     points::M
     normals::Matrix{Float32}
     weights::Vector{Float32}
 end
 
-function OrientedSurfaceMeasure(points::M) where {M<:DenseMatrix{Float32}}
-    num_points = size(points, 2)
-    return OrientedSurfaceMeasure{M}(num_points, points)
-end
-
-struct LatentPointCloud{M<:DenseMatrix{Float32},G<:LatentGrid} <: AbstractPointCloud{M}
-    num_points::Int
-    points::M
-    normals::Matrix{Float32}
-    weights::Vector{Float32}
-    grid::G
-end
-
-function LatentPointCloud(points::M, grid::G) where {M<:DenseMatrix{Float32},G<:LatentGrid}
-    num_points = size(points, 2)
-    return LatentPointCloud{M,G}(num_points, points, grid)
-end
-
-function LatentPointCloud{M}(torus::Torus) where {M<:DenseMatrix{Float32}}
-    T = Float32
-    R = torus.R
-    r = torus.r
-    ϕ_vals = torus.ϕ_vals
-    θ_vals = torus.θ_vals
-    nϕ = length(ϕ_vals)
-    nθ = length(θ_vals)
-
-    sincosϕs = NTuple{2,Float32}[(sin(ϕ), cos(ϕ)) for ϕ in ϕ_vals]
-    points = Array{T}(undef, 3, nϕ, nθ)
-
-    @inbounds for j in eachindex(θ_vals)
-        θ = θ_vals[j]
-        (sinθ, cosθ) = sincos(θ)
-        v = R + r * cosθ
-        z = r * sinθ
-        for i in eachindex(ϕ_vals)
-            (sinϕ, cosϕ) = sincosϕs[i]
-            x = v * cosϕ
-            y = v * sinϕ
-            points[1,i,j] = x
-            points[2,i,j] = y
-            points[3,i,j] = z
-        end
-    end
-
-    # 3 × (nϕ⋅nθ) (column-major, flattens ϕ first, then θ)
-    points_mat = reshape(points, 3, :)
-    point_cloud = LatentPointCloud{M,Torus}(points_mat, torus)
-    return point_cloud
-end
-
-function compute_latent_point_normals_and_weights(torus::Torus)
-    T = Float32
-    R = torus.R
-    r = torus.r
-    ϕ_vals = torus.ϕ_vals
-    θ_vals = torus.θ_vals
-    nϕ = length(ϕ_vals)
-    nθ = length(θ_vals)
-
-    sincosϕs = NTuple{2,Float32}[(sin(ϕ), cos(ϕ)) for ϕ in ϕ_vals]
-    normals = Array{T}(undef, 3, nϕ, nθ)
-    weights = Matrix{T}(undef, nϕ, nθ)
-    @inbounds for j in eachindex(θ_vals)
-        θ = θ_vals[j]
-        (sinθ, cosθ) = sincos(θ)
-        # weight ∝ (R + r * cosθ)
-        weight = R + r * cosθ
-        for i in eachindex(ϕ_vals)
-            (sinϕ, cosϕ) = sincosϕs[i]
-            normals[1,i,j] = cosϕ * cosθ
-            normals[2,i,j] = sinϕ * cosθ
-            normals[3,i,j] = sinθ
-            weights[i,j] = weight
-        end
-    end
-
-    # 3 × (nϕ⋅nθ) (column-major, flattens ϕ first, then θ)
-    normals_mat = reshape(normals, 3, :)
-    weights_vec = reshape(weights, :)
-
-    # normalize weights to sum to 1; normals are already unit length
-    Σweight⁻¹ = inv(sum(weights_vec))
-    @assert isfinite(Σweight⁻¹)
-    weights_vec .*= Σweight⁻¹
-    return (normals_mat, weights_vec)
-end
-
-# extract vertices from a mesh as a 3×n Matrix{T}
-function extract_vertices(mesh::Mesh)
-    T = Float32
-    vertices = mesh.position
-    num_points = length(vertices)
-    dim = length(first(vertices))
-    points = Matrix{T}(undef, dim, num_points)
-    eachcol(points) .= vertices
-    point_cloud = EuclideanPointCloud(points)
-    return point_cloud
-end
-
-# compute vertex normals and weights for a 3D mesh composed of triangular faces, which are
-# computed by averaging the normals of adjacent faces, weighted by the area of those faces.
-function compute_mesh_vertex_normals_and_weights(
+# extract vertices as a point cloud from a 3D trianguler mesh object and compute
+# corresponding vertex normals and weights by averaging the normals of adjacent faces,
+# weighted by the area of those faces.
+function OrientedSurfaceMeasure{M}(
     mesh::Mesh{3,Float32,FaceType,(:position,),Tuple{Vector{Point{3,Float32}}}}
-) where {FaceType<:NgonFace{3}}
+) where {M,FaceType<:NgonFace{3}}
     T = Float32
     faces = mesh.faces
     vertices = mesh.position
-    num_vertices = length(vertices)
-    vertex_normals = zeros(T, 3, num_vertices)
-    vertex_weights = zeros(T, num_vertices)
+    num_points = length(vertices)
+    dim = 3
+
+    points = M(undef, dim, num_points)
+    eachcol(points) .= vertices
+    normals = zeros(T, dim, num_points)
+    weights = zeros(T, num_points)
 
     @inbounds for n in eachindex(faces)
         face = faces[n]
@@ -164,67 +69,114 @@ function compute_mesh_vertex_normals_and_weights(
         normal = edge₁ × edge₂
         (normal_x, normal_y, normal_z) = normal
 
-        vertex_normals[1,i₁] += normal_x
-        vertex_normals[2,i₁] += normal_y
-        vertex_normals[3,i₁] += normal_z
+        normals[1, i₁] += normal_x
+        normals[2, i₁] += normal_y
+        normals[3, i₁] += normal_z
 
-        vertex_normals[1,i₂] += normal_x
-        vertex_normals[2,i₂] += normal_y
-        vertex_normals[3,i₂] += normal_z
+        normals[1, i₂] += normal_x
+        normals[2, i₂] += normal_y
+        normals[3, i₂] += normal_z
 
-        vertex_normals[1,i₃] += normal_x
-        vertex_normals[2,i₃] += normal_y
-        vertex_normals[3,i₃] += normal_z
+        normals[1, i₃] += normal_x
+        normals[2, i₃] += normal_y
+        normals[3, i₃] += normal_z
 
         # ‖normal‖ = 2⋅(area of face)
         double_area = norm(normal)
-        vertex_weights[i₁] += double_area
-        vertex_weights[i₂] += double_area
-        vertex_weights[i₃] += double_area
+        weights[i₁] += double_area
+        weights[i₂] += double_area
+        weights[i₃] += double_area
     end
 
     # normalize vertex weights to sum to 1
-    Σweight⁻¹ = inv(sum(vertex_weights))
+    Σweight⁻¹ = inv(sum(weights))
     @assert isfinite(Σweight⁻¹)
-    vertex_weights .*= Σweight⁻¹
+    weights .*= Σweight⁻¹
 
     # normalize each vertex normal to unit length
-    @inbounds for normal in eachcol(vertex_normals)
+    @inbounds for normal in eachcol(normals)
         magnitude = norm(normal)
         # avoid division by zero
         magnitude += iszero(magnitude)
         # view mutates the underlying array
         normal ./= magnitude
     end
-    return (vertex_normals, vertex_weights)
+    return OrientedSurfaceMeasure{M}(num_points, points, normals, weights)
 end
 
-# Computes pairwise squared Euclidean distance between two point clouds.
-# xs: (d, n) - Latent points
-# ys: (d, m) - Physical grid points
-# Returns: (n, m) distance matrix
-function pairwise_squared_euclidean_distance(
-    xs::M,                                      # d × n
-    ys::M                                       # d × m
-) where {M<:DenseMatrix{Float32}}
-    # xᵀx, yᵀy
-    xs_sq = sum(abs2, xs; dims=1)               # (1 × n)
-    ys_sq = sum(abs2, ys; dims=1)               # (1 × m)
-    xs_sqᵀ = xs_sq'                             # (n × 1)
-    # xᵀy
-    xys = xs' * ys                              # (n × m)
-    # xᵀx + yᵀy - 2xᵀy,  ∀ x ∈ xs, y ∈ ys
-    dists = @. xs_sqᵀ + ys_sq - 2 * xys
-    # ensure non-negativity
-    zer = zero(Float32)
-    dists = max.(dists, zer)
-    return dists                                # (n × m)
+struct LatentOrientedSurfaceMeasure{M<:DenseMatrix{Float32},G<:LatentGrid} <: AbstractMeasure{M}
+    num_points::Int
+    points::M
+    normals::Matrix{Float32}
+    weights::Vector{Float32}
+    grid::G
+end
+
+function LatentOrientedSurfaceMeasure{M}(torus::Torus) where {M<:DenseMatrix{Float32}}
+    T = Float32
+    R = torus.R
+    r = torus.r
+    ϕ_vals = torus.ϕ_vals
+    θ_vals = torus.θ_vals
+    nϕ = length(ϕ_vals)
+    nθ = length(θ_vals)
+    num_points = nϕ * nθ
+    dim = 3
+
+    sincosϕs = NTuple{2,Float32}[(sin(ϕ), cos(ϕ)) for ϕ in ϕ_vals]
+    points = Array{T}(undef, dim, nϕ, nθ)
+    normals = Array{T}(undef, dim, nϕ, nθ)
+    weights = Matrix{T}(undef, nϕ, nθ)
+
+    @inbounds for j in eachindex(θ_vals)
+        θ = θ_vals[j]
+        (sinθ, cosθ) = sincos(θ)
+        v = R + r * cosθ
+        z = r * sinθ
+        for i in eachindex(ϕ_vals)
+            (sinϕ, cosϕ) = sincosϕs[i]
+            # point (x, y, z)
+            points[1,i,j] = v * cosϕ
+            points[2,i,j] = v * sinϕ
+            points[3,i,j] = z
+            # unit normal vector at (x, y, z)
+            normals[1,i,j] = cosϕ * cosθ
+            normals[2,i,j] = sinϕ * cosθ
+            normals[3,i,j] = sinθ
+        end
+        # weight ∝ (R + r * cosθ)
+        weights[:,j] .= v
+    end
+
+    # flatten into (dim × num_points); column-major – flattens ϕ first, then θ
+    points_mat = M(reshape(points, dim, :))
+    normals_mat = reshape(normals, dim, :)
+    weights_vec = reshape(weights, :)
+
+    # normalize weights to sum to 1; normals are already unit length
+    Σweight⁻¹ = inv(sum(weights_vec))
+    @assert isfinite(Σweight⁻¹)
+    weights_vec .*= Σweight⁻¹
+    return LatentOrientedSurfaceMeasure{M,Torus}(num_points, points_mat, normals_mat, weights_vec, torus)
 end
 
 function pairwise_squared_euclidean_distance(
-    xs::AbstractPointCloud{M}, ys::AbstractPointCloud{M}
+    xs::AbstractMeasure{M}, ys::AbstractMeasure{M}
 ) where {M<:DenseMatrix{Float32}}
     return pairwise_squared_euclidean_distance(xs.points, ys.points)
+end
+
+struct OptimalTransportPlan{M<:DenseMatrix{Float32},G<:LatentGrid}
+    plan::M
+    grid::G
+end
+
+function OptimalTransportPlan(
+    xs::OrientedSurfaceMeasure{M}, ys::LatentOrientedSurfaceMeasure{M,G}, num_iters::Int=100
+) where {M<:DenseMatrix{Float32},G<:LatentGrid}
+    dists = pairwise_squared_euclidean_distance(xs, ys)
+    plan = compute_optimal_transport_plan(dists, num_iters)
+    return OptimalTransportPlan(plan, ys.grid)
 end
 
 """
@@ -273,17 +225,26 @@ function compute_optimal_transport_plan(cost_mat::DenseMatrix{Float32}, num_iter
     return P
 end
 
-struct OptimalTransportPlan{M<:DenseMatrix{Float32},G<:LatentGrid}
-    plan::M
-    grid::G
-end
-
-function OptimalTransportPlan(
-    xs::EuclideanPointCloud{M}, ys::LatentPointCloud{M,G}, num_iters::Int=100
-) where {M<:DenseMatrix{Float32},G<:LatentGrid}
-    dists = pairwise_squared_euclidean_distance(xs, ys)
-    plan = compute_optimal_transport_plan(dists, num_iters)
-    return OptimalTransportPlan(plan, ys.grid)
+# compute pairwise squared Euclidean distance between two point clouds.
+# xs: (d, n) - Latent points
+# ys: (d, m) - Physical grid points
+# return: (n, m) distance matrix
+function pairwise_squared_euclidean_distance(
+    xs::M,                                      # d × n
+    ys::M                                       # d × m
+) where {M<:DenseMatrix{Float32}}
+    # xᵀx, yᵀy
+    xs_sq = sum(abs2, xs; dims=1)               # (1 × n)
+    ys_sq = sum(abs2, ys; dims=1)               # (1 × m)
+    xs_sqᵀ = xs_sq'                             # (n × 1)
+    # xᵀy
+    xys = xs' * ys                              # (n × m)
+    # xᵀx + yᵀy - 2xᵀy,  ∀ x ∈ xs, y ∈ ys
+    dists = @. xs_sqᵀ + ys_sq - 2 * xys
+    # ensure non-negativity
+    zer = zero(Float32)
+    dists = max.(dists, zer)
+    return dists                                # (n × m)
 end
 
 function normalize_columns(xs::AbstractMatrix{<:Real})
@@ -305,60 +266,60 @@ function transport(
 end
 
 """
-    pushforward_to_physical(point_cloud::EuclideanPointCloud, ot_plan::OptimalTransportPlan)
+    pushforward_to_physical(measure::OrientedSurfaceMeasure, ot_plan::OptimalTransportPlan)
 
-point_cloud: (d × n) features on physical surface.
+measure: (d × n) features on physical surface.
 ot_plan:     (n × m) optimal transport plan from physical to latent spaces.
 Returns point_cloud_transported: (d × m) features on latent grid.
 """
 function pushforward_to_physical(
-    point_cloud::EuclideanPointCloud{M},                       # (d × n)
-    ot_plan::OptimalTransportPlan{M,G}                         # (n × m)
+    measure::OrientedSurfaceMeasure{M},                    # (d × n)
+    ot_plan::OptimalTransportPlan{M,G}                     # (n × m)
 ) where {M<:DenseMatrix{Float32},G<:LatentGrid}
     plan = ot_plan.plan
-    points_transported = transport(point_cloud.points, plan)   # (d × m)
-    point_cloud_transported = EuclideanPointCloud(points_transported)
-    return point_cloud_transported
+    points_transported = transport(measure.points, plan)   # (d × m)
+    measure_transported = OrientedSurfaceMeasure(points_transported)
+    return measure_transported
 end
 
 """
-    pullback_from_latent(point_cloud::LatentPointCloud, ot_plan::OptimalTransportPlan)
+    pullback_from_latent(measure::LatentOrientedSurfaceMeasure, ot_plan::OptimalTransportPlan)
 
-point_cloud: (d × m) features on latent grid.
+measure: (d × m) features on latent grid.
 ot_plan:     (n × m) optimal transport plan from physical to latent spaces.
 Returns point_cloud_transported: (d × n) features on physical surface, i. e. what the latent
 grid looks like after being bent/warped to match the surface of the input physical object.
 """
 function pullback_from_latent(
-    point_cloud::LatentPointCloud{M},                           # (d × m)
+    measure::LatentOrientedSurfaceMeasure{M},                           # (d × m)
     ot_plan::OptimalTransportPlan{M}                            # (n × m)
 ) where {M<:DenseMatrix{Float32}}
     plan = ot_plan.plan
     # transpose the transport plan to go from latent to physical
-    points_transported = transport(point_cloud.points, plan')   # (d × n)
-    point_cloud_transported = EuclideanPointCloud(points_transported)
-    return point_cloud_transported
+    points_transported = transport(measure.points, plan')   # (d × n)
+    measure_transported = OrientedSurfaceMeasure(points_transported)
+    return measure_transported
 end
 
 # for each point in the destination point cloud, find and assign the index of the closest
 # point in the source point cloud
 function assign_points(
-    point_cloud_src::AbstractPointCloud,       # (d x n)
-    point_cloud_dst::AbstractPointCloud        # (d x m)
+    measure_src::AbstractMeasure,       # (d x n)
+    measure_dst::AbstractMeasure        # (d x m)
 )
-    dists = pairwise_squared_euclidean_distance(point_cloud_src, point_cloud_dst) # (n x m)
+    dists = pairwise_squared_euclidean_distance(measure_src, measure_dst) # (n x m)
     index_pairs = vec(argmin(dists; dims=1))   # (m)
     indices_best = getindex.(index_pairs, 1)   # (m)
     return indices_best
 end
 
 function compute_encoder_and_decoder(
-    point_cloud::EuclideanPointCloud{M},      # (d × n)
-    point_cloud_latent::LatentPointCloud{M}   # (d × m)
+    measure::OrientedSurfaceMeasure{M},                               # (d × n)
+    measure_latent::LatentOrientedSurfaceMeasure{M}                   # (d × m)
 ) where {M<:DenseMatrix{Float32}}
-    ot_plan = OptimalTransportPlan(point_cloud, point_cloud_latent)           # (n × m)
-    point_cloud_transported = pushforward_to_physical(point_cloud, ot_plan)   # (d × m)
-    encoding_indices = assign_points(point_cloud, point_cloud_transported)    # (m)
-    decoding_indices = assign_points(point_cloud_transported, point_cloud)    # (n)
-    return (encoding_indices, decoding_indices, ot_plan, point_cloud_transported)
+    ot_plan = OptimalTransportPlan(measure, measure_latent)           # (n × m)
+    measure_transported = pushforward_to_physical(measure, ot_plan)   # (d × m)
+    encoding_indices = assign_points(measure, measure_transported)    # (m)
+    decoding_indices = assign_points(measure_transported, measure)    # (n)
+    return (encoding_indices, decoding_indices, ot_plan, measure_transported)
 end

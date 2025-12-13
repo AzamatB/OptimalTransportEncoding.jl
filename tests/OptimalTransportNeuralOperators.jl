@@ -2,23 +2,24 @@ using GeometryBasics
 using FileIO
 using MeshIO
 
+M = Matrix{Float32}
 file_path = "datasets/ShapeNet-Car/data/mesh_001.ply"
 mesh = load(file_path)
-point_cloud = extract_vertices(mesh)
+measure = OrientedSurfaceMeasure{M}(mesh)
 
 n = 64
 torus = Torus(n)
-point_cloud_latent = LatentPointCloud{Matrix{Float32}}(torus)
+measure_latent = LatentOrientedSurfaceMeasure{M}(torus)
 
-(encoding_indices, decoding_indices, ot_plan, point_cloud_transported) = compute_encoder_and_decoder(
-    point_cloud, point_cloud_latent
+@time (encoding_indices, decoding_indices, ot_plan, measure_transported) = compute_encoder_and_decoder(
+    measure, measure_latent
 )
 
 unique(encoding_indices)
 unique(decoding_indices)
 
-encoded_points = point_cloud.points[:, encoding_indices]
-decoded_points = point_cloud_transported.points[:, decoding_indices]
+encoded_points = measure.points[:, encoding_indices]
+decoded_points = measure_transported.points[:, decoding_indices]
 
 count(iszero, ot_plan.plan)/length(ot_plan.plan)
 minimum(sum(ot_plan.plan; dims=2)) / (1 / size(ot_plan.plan, 1))
