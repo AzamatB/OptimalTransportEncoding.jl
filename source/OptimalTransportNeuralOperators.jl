@@ -306,13 +306,9 @@ end
 
 # for each point in the destination point cloud, find and assign the index of the closest
 # point in the source point cloud
-function assign_points(
-    points_src::M,                             # (d x n)
-    points_dst::M                              # (d x m)
-) where {M<:DenseMatrix{Float32}}
-    dists = pairwise_squared_euclidean_distance(points_src, points_dst)   # (n x m)
-    index_pairs = vec(argmin(dists; dims=1))   # (m)
-    indices_best = getindex.(index_pairs, 1)   # (m)
+function assign_points(dists::DenseMatrix{Float32})   # (n x m)
+    index_pairs = vec(argmin(dists; dims=1))          # (m)
+    indices_best = getindex.(index_pairs, 1)          # (m)
     return indices_best
 end
 
@@ -324,16 +320,21 @@ ot_plan: (n × m) optimal transport plan from physical to latent spaces.
 Returns measure_t: (d × m) features on latent grid.
 """
 function pushforward_to_physical(
-    measure::OrientedSurfaceMeasure{M},                  # (d × n)
-    ot_plan::OptimalTransportPlan{M,G}                   # (n × m)
+    measure::OrientedSurfaceMeasure{M},                             # (d × n)
+    ot_plan::OptimalTransportPlan{M,G}                              # (n × m)
 ) where {M<:DenseMatrix{Float32},G<:LatentGrid}
     plan = ot_plan.plan
     points = measure.points
-    points_t = transport(points, plan)                   # (d × m)
-    encoding_indices = assign_points(points, points_t)   # (m)
-    decoding_indices = assign_points(points_t, points)   # (n)
-    normals_t = measure.normals[:, encoding_indices]     # (d × m)
-    measure_t = OrientedSurfaceMeasure(length(encoding_indices), points_t, normals_t, measure.weights)
+
+    points_t = transport(points, plan)                              # (d × m)
+    dists = pairwise_squared_euclidean_distance(points, points_t)   # (n × m)
+
+    encoding_indices = assign_points(dists)                         # (m)
+    decoding_indices = assign_points(dists')                        # (n)
+    normals_t = measure.normals[:, encoding_indices]                # (d × m)
+    # dummy weights
+    weights = similar(measure.weights, 0)
+    measure_t = OrientedSurfaceMeasure(length(encoding_indices), points_t, normals_t, weights)
     return (measure_t, encoding_indices, decoding_indices)
 end
 
