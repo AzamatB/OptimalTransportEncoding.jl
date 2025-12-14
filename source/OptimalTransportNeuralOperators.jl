@@ -1,4 +1,5 @@
 using CUDA
+using CairoMakie
 using GeometryBasics
 using FileIO
 using LinearAlgebra
@@ -275,6 +276,7 @@ function estimate_plan_convergence(
     plan = ot_plan.plan                                        # (n × m)
     mu = measure.weights                                       # (n)
     nu = measure_l.weights                                     # (m)
+    sparsity = count(iszero, plan) / length(plan)
 
     marginals_row = dropdims(sum(plan; dims=2); dims=2)        # (n)
     marginals_col = dropdims(sum(plan; dims=1); dims=1)        # (m)
@@ -285,7 +287,22 @@ function estimate_plan_convergence(
     relative_errors_col = @. abs(marginals_col / nu - 1.0f0)   # (m)
     error_col = maximum(relative_errors_col)
     error = max(error_row, error_col)
-    return error
+    return (; error, sparsity)
+end
+
+function plot_ot_plan(
+    ot_plan::OptimalTransportPlan;
+    title::String="Optimal Transport Plan",
+    xlabel::String="Source Points",
+    ylabel::String="Target Points"
+)
+    plan = ot_plan.plan
+    figure = Figure()
+    # origin at top-left like matrix indexing
+    axis = Axis(figure[1, 1]; title, xlabel, ylabel, yreversed=true)
+    heatmap = heatmap!(axis, plan)
+    Colorbar(figure[1, 2], heatmap)
+    return figure
 end
 
 function normalize_columns(xs::AbstractMatrix{<:Real})
@@ -336,7 +353,7 @@ function pushforward_to_latent(
 
     points_snapped = points[:,encoding_indices]                     # (d × m)
     normals_snapped = measure.normals[:,encoding_indices]           # (d × m)
-    return (points_snapped, normals_snapped, encoding_indices, decoding_indices)
+    return (points_snapped, normals_snapped, encoding_indices, decoding_indices, ot_plan)
 end
 
 function cross_cols(xs::Matrix{Float32}, ys::Matrix{Float32})
@@ -356,9 +373,9 @@ function encode(
     measure_l::LatentOrientedSurfaceMeasure{M}           # (d × m)
 ) where {M<:DenseMatrix{Float32}}
     ot_plan = OptimalTransportPlan(measure, measure_l)   # (n × m)
-    (points_t, normals_t, encoding_indices, decoding_indices) = pushforward_to_latent(
+    (points_t, normals_t, encoding_indices, decoding_indices, ot_plan) = pushforward_to_latent(
         measure, ot_plan
     )
     torsions = cross_cols(measure_l.normals, normals_t)
-    return (measure_l.points, points_t, torsions, encoding_indices, decoding_indices)
+    return (measure_l.points, points_t, torsions, encoding_indices, decoding_indices, ot_plan)
 end
