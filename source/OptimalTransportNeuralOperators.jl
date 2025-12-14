@@ -334,12 +334,21 @@ function pushforward_to_latent(
     encoding_indices = assign_points(dists)                         # (m)
     decoding_indices = assign_points(dists')                        # (n)
 
-    num_points = length(encoding_indices)
     points_snapped = points[:,encoding_indices]                     # (d × m)
     normals_snapped = measure.normals[:,encoding_indices]           # (d × m)
-    weights = similar(measure.weights, 0)   # dummy weights
-    measure_t = OrientedSurfaceMeasure(num_points, points_snapped, normals_snapped, weights)
-    return (measure_t, encoding_indices, decoding_indices)
+    return (points_snapped, normals_snapped, encoding_indices, decoding_indices)
+end
+
+function cross_cols(xs::Matrix{Float32}, ys::Matrix{Float32})
+    @assert size(xs) == size(ys)
+    @assert size(xs, 1) == 3
+    zs = similar(xs)
+    @inbounds @simd for j in axes(xs, 2)
+        zs[1,j] = xs[2,j] * ys[3,j] - xs[3,j] * ys[2,j]
+        zs[2,j] = xs[3,j] * ys[1,j] - xs[1,j] * ys[3,j]
+        zs[3,j] = xs[1,j] * ys[2,j] - xs[2,j] * ys[1,j]
+    end
+    return zs
 end
 
 function encode(
@@ -347,6 +356,9 @@ function encode(
     measure_l::LatentOrientedSurfaceMeasure{M}           # (d × m)
 ) where {M<:DenseMatrix{Float32}}
     ot_plan = OptimalTransportPlan(measure, measure_l)   # (n × m)
-    (measure_t, encoding_indices, decoding_indices) = pushforward_to_latent(measure, ot_plan)
-    return (measure_t, encoding_indices, decoding_indices, ot_plan)
+    (points_t, normals_t, encoding_indices, decoding_indices) = pushforward_to_latent(
+        measure, ot_plan
+    )
+    torsions = cross_cols(measure_l.normals, normals_t)
+    return (measure_l.points, points_t, torsions, encoding_indices, decoding_indices)
 end
