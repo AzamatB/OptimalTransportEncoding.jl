@@ -11,6 +11,8 @@ using MeshIO
 using NPZ
 using OptimalTransportNeuralOperators
 
+CUDA.allowscalar(false)
+
 struct ShapeNetCarDataSamplePaths <: OTNO.AbstractDataSamplePaths
     mesh::String
     target::String
@@ -50,8 +52,7 @@ end
 
 #######   preprocess the ShapeNet-Car dataset and save processed files   #######
 
-# M = Matrix{Float32}
-M = CuMatrix{Float32,DeviceMemory}
+M = CUDA.functional() ? CuMatrix{Float32,DeviceMemory} : Matrix{Float32}
 
 dir_src = "datasets/car-pressure-data/data"
 dir_dst = "datasets/car-pressure-data/processed-data"

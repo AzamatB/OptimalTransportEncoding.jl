@@ -9,6 +9,8 @@ using NNlib
 using Serialization
 using Statistics
 
+CUDA.allowscalar(false)
+
 abstract type LatentGrid end
 
 function vec_type(::Type{<:Array{T}}) where {T}
