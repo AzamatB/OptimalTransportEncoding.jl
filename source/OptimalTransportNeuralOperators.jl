@@ -1,11 +1,15 @@
+module OptimalTransportNeuralOperators
+
 using CUDA
 using CairoMakie
 using GeometryBasics
 using GeometryBasics: Mesh
 using FileIO
+using LazyArrays
 using LinearAlgebra
 using MeshIO
 using NNlib
+using Serialization
 using Statistics
 
 abstract type LatentGrid end
@@ -349,7 +353,6 @@ end
 
 measure: (d × n) features on the physical surface.
 ot_plan: (n × m) optimal transport plan from physical to latent spaces.
-Returns measure_t: (d × m) features on latent grid.
 """
 function pushforward_to_latent(
     measure::OrientedSurfaceMeasure{M},                             # (d × n)
@@ -366,7 +369,7 @@ function pushforward_to_latent(
 
     points_snapped = points[:,encoding_indices]                     # (d × m)
     normals_snapped = measure.normals[:,encoding_indices]           # (d × m)
-    return (points_snapped, normals_snapped, encoding_indices, decoding_indices)
+    return (points_snapped, normals_snapped, decoding_indices)
 end
 
 function encode(
@@ -377,9 +380,7 @@ function encode(
     convergence_metrics = estimate_plan_convergence(ot_plan, measure, measure_l)
     display(convergence_metrics)
 
-    (points_t, normals_t, encoding_indices, decoding_indices) = pushforward_to_latent(
-        measure, ot_plan
-    )
+    (points_t, normals_t, decoding_indices) = pushforward_to_latent(measure, ot_plan)
     torsions = cross_cols(measure_l.normals, normals_t)
     grid = measure_l.grid
     nϕ = length(grid.ϕ_vals)
@@ -387,5 +388,43 @@ function encode(
 
     features_flat = [measure_l.points' points_t' torsions']   # (m × 9)
     features = reshape(features_flat, nϕ, nθ, 9, 1)           # (nϕ × nθ × 9 × 1)
-    return (features, encoding_indices, decoding_indices)
+    return (features, decoding_indices)
 end
+
+abstract type AbstractDataSamplePaths end
+
+function read_mesh_and_target end
+
+struct OTNODataSample
+    features::Array{Float32,4}
+    decoding_indices::Vector{Int}
+    target::Vector{Float32}
+end
+
+function OTNODataSample(
+    sample_paths::AbstractDataSamplePaths, ::Type{M}
+) where {M<:DenseMatrix{Float32}}
+    (mesh, target) = read_mesh_and_target(sample_paths)
+    measure = OrientedSurfaceMeasure{M}(mesh)
+    num_points_l = ceil(Int, 1.7 * measure.num_points)
+    torus = Torus(num_points_l)
+    measure_l = LatentOrientedSurfaceMeasure{M}(torus)
+    @time (features, decoding_indices) = encode(measure, measure_l)
+    return OTNODataSample(features, decoding_indices, target)
+end
+
+function save_sample(path::AbstractString, data_sample::OTNODataSample)
+    open(path, "w") do io
+        serialize(io, data_sample)
+    end
+    return nothing
+end
+
+function load_sample(path::AbstractString)
+    data_sample = open(path, "r") do io
+        deserialize(io)
+    end
+    return data_sample::OTNODataSample
+end
+
+end # module OptimalTransportNeuralOperators
