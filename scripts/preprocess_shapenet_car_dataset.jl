@@ -1,9 +1,11 @@
+module_path = normpath(joinpath(@__DIR__, "..", "src"))
+push!(LOAD_PATH, module_path)
+
 using NPZ
+using OptimalTransportNeuralOperators
 
-include("source/OptimalTransportNeuralOperators.jl")
-
-import .OptimalTransportNeuralOperators as OTNO
-using .OptimalTransportNeuralOperators: OTNODataSample
+import OptimalTransportNeuralOperators as OTNO
+using OptimalTransportNeuralOperators: OTNODataSample
 
 struct ShapeNetCarDataSamplePaths <: OTNO.AbstractDataSamplePaths
     mesh::String
@@ -42,8 +44,9 @@ function preprocess_and_save_dataset(dir_src::String, dir_dst::String)
 end
 
 
-#### preprocess the ShapeNet-Car dataset and save processed files
+#######   preprocess the ShapeNet-Car dataset and save processed files   #######
 
 dir_src = "datasets/car-pressure-data/data"
-dir_dst = "datasets/processed-car-pressure-data/data"
+dir_dst = "datasets/car-pressure-data/processed-data"
+
 preprocess_and_save_dataset(dir_src, dir_dst)
