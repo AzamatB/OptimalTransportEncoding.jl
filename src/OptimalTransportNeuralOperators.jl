@@ -347,6 +347,14 @@ function assign_points(dists::AbstractMatrix{Float32})   # (n x m)
     return indices_best
 end
 
+function ratio_utilized(indices::DenseVector{Int}, num_points::Int)
+    inds = Vector{Int}(indices)
+    max_possible = min(length(inds), num_points)
+    num_points_utilized = length(unique(inds))
+    ratio = num_points_utilized / max_possible
+    return ratio
+end
+
 """
     pushforward_to_latent(measure::OrientedSurfaceMeasure, ot_plan::OptimalTransportPlan)
 
@@ -365,6 +373,11 @@ function pushforward_to_latent(
 
     encoding_indices = assign_points(dists)                         # (m)
     decoding_indices = assign_points(dists')                        # (n)
+
+    used_ratio_encoding = ratio_utilized(encoding_indices, measure.num_points)
+    used_ratio_decoding = ratio_utilized(decoding_indices, measure_l.num_points)
+    ratios = (; used_ratio_encoding, used_ratio_decoding)
+    display(ratios)
 
     points_snapped = points[:,encoding_indices]                     # (d × m)
     normals_snapped = measure.normals[:,encoding_indices]           # (d × m)
