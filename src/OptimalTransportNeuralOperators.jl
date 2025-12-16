@@ -341,9 +341,9 @@ end
 
 # for each point in the destination point cloud, find and assign the index of the closest
 # point in the source point cloud
-function assign_points(dists::AbstractMatrix{Float32})   # (n x m)
-    index_pairs = vec(argmin(dists; dims=1))             # (m)
-    indices_best = getindex.(index_pairs, 1)             # (m)
+function assign_points(dists::AbstractMatrix{Float32}, dim::Int)   # (n x m)
+    index_pairs = vec(argmin(dists; dims=dim))                     # (m)
+    indices_best = getindex.(index_pairs, dim)                     # (m)
     return indices_best
 end
 
@@ -371,8 +371,8 @@ function pushforward_to_latent(
     points_t = transport(points, plan)                              # (d × m)
     dists = pairwise_squared_euclidean_distance(points, points_t)   # (n × m)
 
-    encoding_indices = assign_points(dists)                         # (m)
-    decoding_indices = assign_points(dists')                        # (n)
+    encoding_indices = assign_points(dists, 1)                      # (m)
+    decoding_indices = assign_points(dists, 2)                      # (n)
 
     used_ratio_encoding = ratio_utilized(encoding_indices, measure.num_points)
     used_ratio_decoding = ratio_utilized(decoding_indices, measure_l.num_points)
