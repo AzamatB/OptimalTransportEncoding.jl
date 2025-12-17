@@ -1,4 +1,4 @@
-module OptimalTransportNeuralOperators
+module OptimalTransportEncoding
 
 using CUDA
 using CairoMakie
@@ -419,13 +419,13 @@ abstract type AbstractDataSamplePaths end
 
 function read_mesh_and_target end
 
-struct OTNODataSample
+struct OTEDataSample
     features::Array{Float32,4}
     target::Vector{Float32}
     decoding_indices::Vector{Int}
 end
 
-function OTNODataSample(
+function OTEDataSample(
     sample_paths::AbstractDataSamplePaths, ::Type{M}
 ) where {M<:DenseMatrix{Float32}}
     (mesh, target) = read_mesh_and_target(sample_paths)
@@ -434,10 +434,10 @@ function OTNODataSample(
     torus = Torus(num_points_l)
     measure_l = LatentOrientedSurfaceMeasure{M}(torus)
     @time (features, decoding_indices) = encode(measure, measure_l)
-    return OTNODataSample(features, target, decoding_indices)
+    return OTEDataSample(features, target, decoding_indices)
 end
 
-function save_sample(path::AbstractString, data_sample::OTNODataSample)
+function save_sample(path::AbstractString, data_sample::OTEDataSample)
     open(path, "w") do io
         serialize(io, data_sample)
     end
@@ -448,7 +448,7 @@ function load_sample(path::AbstractString)
     data_sample = open(path, "r") do io
         deserialize(io)
     end
-    return data_sample::OTNODataSample
+    return data_sample::OTEDataSample
 end
 
-end # module OptimalTransportNeuralOperators
+end # module OptimalTransportEncoding

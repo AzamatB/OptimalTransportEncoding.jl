@@ -1,4 +1,4 @@
-name = "OptimalTransportNeuralOperators"
+name = "OptimalTransportEncoding"
 uuid = "9293f2df-f007-49db-87f5-b81dc5dc2a74"
 authors = ["Azamat Berdyshev"]
 version = "0.1.0"

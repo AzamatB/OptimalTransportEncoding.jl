@@ -1,7 +1,7 @@
 module_path = normpath(joinpath(@__DIR__, "..", "src"))
 push!(LOAD_PATH, module_path)
 
-import OptimalTransportNeuralOperators as OTNO
+import OptimalTransportEncoding as OTE
 
 using CUDA
 using CUDA: DeviceMemory
@@ -9,18 +9,18 @@ using FileIO
 using LazyArrays
 using MeshIO
 using NPZ
-using OptimalTransportNeuralOperators
-using OptimalTransportNeuralOperators: OrientedSurfaceMeasure, LatentOrientedSurfaceMeasure,
-                                       Torus, encode, OTNODataSample
+using OptimalTransportEncoding
+using OptimalTransportEncoding: OrientedSurfaceMeasure, LatentOrientedSurfaceMeasure,
+                                Torus, encode, OTEDataSample
 
 CUDA.allowscalar(false)
 
-struct ShapeNetCarDataSamplePaths <: OTNO.AbstractDataSamplePaths
+struct ShapeNetCarDataSamplePaths <: OTE.AbstractDataSamplePaths
     mesh::String
     target::String
 end
 
-function OTNO.read_mesh_and_target(sample_paths::ShapeNetCarDataSamplePaths)
+function OTE.read_mesh_and_target(sample_paths::ShapeNetCarDataSamplePaths)
     mesh = load(sample_paths.mesh)
     target_raw = npzread(sample_paths.target)
     num_points = length(mesh.position)
@@ -46,8 +46,8 @@ function preprocess_and_save_dataset(
         file_path_dst = joinpath(dir_dst, "$folder.jls")
 
         sample_paths = ShapeNetCarDataSamplePaths(file_path_mesh, file_path_target)
-        data_sample = OTNO.OTNODataSample(sample_paths, M)
-        OTNO.save_sample(file_path_dst, data_sample)
+        data_sample = OTE.OTEDataSample(sample_paths, M)
+        OTE.save_sample(file_path_dst, data_sample)
     end
     return nothing
 end
@@ -61,7 +61,7 @@ file_path_x = "datasets/car-pressure-data/data/001/tri_mesh.ply"
 file_path_y = "datasets/car-pressure-data/data/001/press.npy"
 
 sample_paths = ShapeNetCarDataSamplePaths(file_path_x, file_path_y)
-(mesh, target) = OTNO.read_mesh_and_target(sample_paths)
+(mesh, target) = OTE.read_mesh_and_target(sample_paths)
 
 measure = OrientedSurfaceMeasure{M}(mesh)
 
