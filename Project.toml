@@ -1,6 +1,6 @@
 name = "OptimalTransportEncoding"
-uuid = "9293f2df-f007-49db-87f5-b81dc5dc2a74"
-authors = ["Azamat Berdyshev"]
+uuid = "312e035e-a767-4ce3-8384-49b2c9cb5f83"
+authors = ["Azamat Berdyshev <aberdysh@gmail.com>"]
 version = "0.1.0"
 
 [deps]
@@ -18,4 +18,16 @@ Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
-julia = "1.11"
+julia = "1.11.8"
+CUDA = "5.9.5"
+CairoMakie = "0.15.8"
+FileIO = "1.17.1"
+GeometryBasics = "0.5.10"
+LazyArrays = "2.9.4"
+LinearAlgebra = "1.11.0"
+MeshIO = "0.5.3"
+NNlib = "0.9.32"
+NPZ = "0.4.3"
+Random = "1.11.0"
+Serialization = "1.11.0"
+Statistics = "1.11.1"
