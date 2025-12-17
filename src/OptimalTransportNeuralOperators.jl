@@ -421,8 +421,8 @@ function read_mesh_and_target end
 
 struct OTNODataSample
     features::Array{Float32,4}
-    decoding_indices::Vector{Int}
     target::Vector{Float32}
+    decoding_indices::Vector{Int}
 end
 
 function OTNODataSample(
@@ -434,7 +434,7 @@ function OTNODataSample(
     torus = Torus(num_points_l)
     measure_l = LatentOrientedSurfaceMeasure{M}(torus)
     @time (features, decoding_indices) = encode(measure, measure_l)
-    return OTNODataSample(features, decoding_indices, target)
+    return OTNODataSample(features, target, decoding_indices)
 end
 
 function save_sample(path::AbstractString, data_sample::OTNODataSample)
