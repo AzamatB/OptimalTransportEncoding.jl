@@ -1,6 +1,3 @@
-module_path = normpath(joinpath(@__DIR__, "..", "src"))
-push!(LOAD_PATH, module_path)
-
 import OptimalTransportEncoding as OTE
 
 using CUDA

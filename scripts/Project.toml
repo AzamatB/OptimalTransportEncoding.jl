@@ -1,0 +1,13 @@
+name = "ShapeNetCarOptimalTransportEncoding"
+authors = ["Azamat Berdyshev <aberdysh@gmail.com>"]
+
+[deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
+LazyArrays = "5078a376-72f3-5289-bfd5-ec5146d43c02"
+MeshIO = "7269a6da-0436-5bbc-96c2-40638cbb6118"
+NPZ = "15e1cf62-19b3-5cfa-8e77-841668bca605"
+OptimalTransportEncoding = "312e035e-a767-4ce3-8384-49b2c9cb5f83"
+
+[sources]
+OptimalTransportEncoding = {path = ".."}
