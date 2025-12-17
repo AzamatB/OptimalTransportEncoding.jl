@@ -354,7 +354,7 @@ function assign_points(dists::AbstractMatrix{Float32}, dim::Int)   # (n x m)
     return indices_best
 end
 
-function ratio_utilized(indices::Vector{Int}, num_points::Int)
+function ratio_utilized(indices::Vector{Int32}, num_points::Int)
     max_possible = min(length(indices), num_points)
     num_points_utilized = length(unique(indices))
     ratio = num_points_utilized / max_possible
