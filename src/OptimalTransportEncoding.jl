@@ -395,10 +395,10 @@ function pushforward_to_latent(
 end
 
 function encode(
-    measure::OrientedSurfaceMeasure{M},                  # (d × n)
-    measure_l::LatentOrientedSurfaceMeasure{M}           # (d × m)
+    measure::OrientedSurfaceMeasure{M},                                    # (d × n)
+    measure_l::LatentOrientedSurfaceMeasure{M}                             # (d × m)
 ) where {M<:DenseMatrix{Float32}}
-    ot_plan = OptimalTransportPlan(measure, measure_l)   # (n × m)
+    ot_plan = OptimalTransportPlan(measure, measure_l)                     # (n × m)
     convergence_metrics = estimate_plan_convergence(ot_plan, measure, measure_l)
     display(convergence_metrics)
 
@@ -406,21 +406,24 @@ function encode(
     points_l_cpu = move_to_cpu(measure_l.points)
     points_t_cpu = move_to_cpu(points_t)
     torsions = cross_cols(measure_l.normals, normals_t)
-    grid = measure_l.grid
+    features_flat = [points_l_cpu' points_t_cpu' torsions']                # (m × 9)
+    features = expand_to_latent_dimension(measure_l.grid, features_flat)   # (nϕ × nθ × 9 × 1)
+    return (features, decoding_indices)
+end
+
+function expand_to_latent_dimension(grid::Torus, features_flat::Matrix{Float32})
     nϕ = length(grid.ϕ_vals)
     nθ = length(grid.θ_vals)
-
-    features_flat = [points_l_cpu' points_t_cpu' torsions']   # (m × 9)
-    features = reshape(features_flat, nϕ, nθ, 9, 1)           # (nϕ × nθ × 9 × 1)
-    return (features, decoding_indices)
+    features = reshape(features_flat, nϕ, nθ, 9, 1)   # (nϕ × nθ × 9 × 1)
+    return features
 end
 
 abstract type AbstractDataSamplePaths end
 
 function read_mesh_and_target end
 
-struct OTEDataSample
-    features::Array{Float32,4}
+struct OTEDataSample{N}
+    features::Array{Float32,N}
     target::Vector{Float32}
     decoding_indices::Vector{Int32}
 end

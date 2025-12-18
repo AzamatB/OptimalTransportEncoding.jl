@@ -54,7 +54,6 @@ end
 
 #######   preprocess the ShapeNet-Car dataset and save processed files   #######
 
-
 M = CUDA.functional() ? CuMatrix{Float32,DeviceMemory} : Matrix{Float32}
 
 file_path_x = "datasets/car-pressure-data/data/001/tri_mesh.ply"
