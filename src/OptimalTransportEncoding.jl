@@ -224,6 +224,11 @@ function compute_optimal_transport_plan(
     ε = T(0.0008) # relative (to the mean cost) entropy regularization parameter
     (n, m) = size(costs)
 
+    # ensure no zero marginals (to avoid log(0))
+    δ = floatmin(T)
+    @. mu += δ * iszero(mu)
+    @. nu += δ * iszero(nu)
+
     # validate dimensions
     @assert length(mu) == n "Source marginal dimension (mu) does not match costs' rows."
     @assert length(nu) == m "Target marginal dimension (nu) does not match costs' columns."
@@ -348,9 +353,9 @@ end
 
 # for each point in the destination point cloud, find and assign the index of the closest
 # point in the source point cloud
-function assign_points(dists::AbstractMatrix{Float32}, dim::Int)   # (n x m)
-    index_pairs = vec(argmin(dists; dims=dim))                     # (m)
-    indices_best = @. Int32(getindex(index_pairs, dim))            # (m)
+function assign_points(dists::AbstractMatrix{Float32}, ::Val{D}) where {D}   # (n x m)
+    index_pairs = vec(argmin(dists; dims=D))                                 # (m/n)
+    indices_best = @. Int32(getindex(index_pairs, D))                        # (m/n)
     return indices_best
 end
 
@@ -377,8 +382,8 @@ function pushforward_to_latent(
     points_t = transport(points, plan)                              # (d × m)
     dists = pairwise_squared_euclidean_distance(points, points_t)   # (n × m)
 
-    encoding_indices = assign_points(dists, 1)                      # (m)
-    decoding_indices = assign_points(dists, 2)                      # (n)
+    encoding_indices = assign_points(dists, Val(1))                  # (m)
+    decoding_indices = assign_points(dists, Val(2))                  # (n)
 
     encoding_indices_cpu = move_to_cpu(encoding_indices)
     decoding_indices_cpu = move_to_cpu(decoding_indices)
