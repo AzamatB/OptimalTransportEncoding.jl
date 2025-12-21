@@ -33,8 +33,8 @@ function solve_optimal_transport_lp(
     end
 
     col_ind = Vector{Int32}(undef, nnz)
+    range_num_vars₁ = 1:num_vars
     range_num_vars₀ = Int32(0):Int32(num_vars - 1)
-    range_num_vars₁ = Int32(1):Int32(num_vars)
     # source constraints block (rows 1..n): row-wise access in column-major flattening
     @. col_ind[range_num_vars₁] = linear_index(range_num_vars₀, n, m)
     # target constraints block (rows n+1..n+m): contiguous columns
