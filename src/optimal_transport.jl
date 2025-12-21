@@ -78,28 +78,27 @@ function solve_lp_problem(
     col_ind::Vector{Int32},
     vals::Vector{Float64}
 )
-    # form constraint matrix A in CSR format
-    A_csr = Lib.MatrixCSR(nnz, pointer(row_ptr), pointer(col_ind), pointer(vals))
-
-    # construct matrix_desc_t object for A
-    # 1. allocate zeroed struct on Julia side
     A_desc_ref = Ref{Lib.matrix_desc_t}()
-    A_desc_ref[] = Lib.matrix_desc_t(ntuple(_ -> UInt8(0), Val(56))) # clear memory
-    A_desc_ptr = Base.unsafe_convert(Ptr{Lib.matrix_desc_t}, A_desc_ref)
-    # 2. set scalar fields
-    A_desc_ptr.m = num_cons
-    A_desc_ptr.n = num_vars
-    A_desc_ptr.fmt = Lib.matrix_csr
-    A_desc_ptr.zero_tolerance = 0.0
-    # 3. pass the CSR matrix A
-    A_desc_ptr.data.csr = A_csr
-
-    # set default PDHG parameters
     params_ref = Ref{Lib.pdhg_parameters_t}()
-    params_ptr = Base.unsafe_convert(Ptr{Lib.pdhg_parameters_t}, params_ref)
-    Lib.set_default_parameters(params_ptr)
-
     GC.@preserve c c₀ con_lb con_ub var_lb var_ub row_ptr col_ind vals A_desc_ref params_ref begin
+        # form constraint matrix A in CSR format
+        A_csr = Lib.MatrixCSR(nnz, pointer(row_ptr), pointer(col_ind), pointer(vals))
+        # construct matrix_desc_t object for A
+        # 1. allocate zeroed struct on Julia side
+        A_desc_ref[] = Lib.matrix_desc_t(ntuple(_ -> UInt8(0), Val(56))) # clear memory
+        A_desc_ptr = Base.unsafe_convert(Ptr{Lib.matrix_desc_t}, A_desc_ref)
+        # 2. set scalar fields
+        A_desc_ptr.m = num_cons
+        A_desc_ptr.n = num_vars
+        A_desc_ptr.fmt = Lib.matrix_csr
+        A_desc_ptr.zero_tolerance = 0.0
+        # 3. pass the CSR matrix A
+        A_desc_ptr.data.csr = A_csr
+
+        # set default PDHG parameters
+        params_ptr = Base.unsafe_convert(Ptr{Lib.pdhg_parameters_t}, params_ref)
+        Lib.set_default_parameters(params_ptr)
+
         lp_problem = Lib.create_lp_problem(
             pointer(c),
             A_desc_ptr,
