@@ -168,6 +168,27 @@ function OptimalTransportPlan(
     return OptimalTransportPlan(plan)
 end
 
+# compute pairwise squared Euclidean distance between two point clouds.
+# xs: (d, n) - physical points
+# ys: (d, m) - latent points
+# return: (n, m) distance matrix
+function pairwise_squared_euclidean_distance(
+    xs::M,                                      # d × n
+    ys::M                                       # d × m
+) where {M<:DenseMatrix{Float32}}
+    # xᵀx, yᵀy
+    xs_sq = sum(abs2, xs; dims=1)               # (1 × n)
+    ys_sq = sum(abs2, ys; dims=1)               # (1 × m)
+    xs_sqᵀ = xs_sq'                             # (n × 1)
+    # xᵀy
+    xys = xs' * ys                              # (n × m)
+    # ensure non-negativity
+    zer = zero(Float32)
+    # xᵀx + yᵀy - 2xᵀy,  ∀ x ∈ xs, y ∈ ys
+    dists = @. max(xs_sqᵀ + ys_sq - 2 * xys, zer)
+    return dists                                # (n × m)
+end
+
 function cross_cols(xs::Matrix{Float32}, ys::Matrix{Float32})
     @assert size(xs) == size(ys)
     @assert size(xs, 1) == 3
