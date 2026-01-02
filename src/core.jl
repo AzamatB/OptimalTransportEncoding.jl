@@ -10,9 +10,10 @@ struct Torus <: LatentGrid
     ϕ_vals::Vector{Float32}
     θ_vals::Vector{Float32}
 
-    function Torus(n::Int, R::Real=3.0f0, r::Real=1.0f0)
-        @assert R > r > 0
+    function Torus(n::Int)
         T = Float32
+        r = 1.0f0
+        R = √(2.0f0)
         # n ≈ nφ⋅nθ, with nφ/nθ ≈ R/r; so nφ ≈ (R/r)·nθ and n ≈ (R/r)·nθ² => nθ ≈ √(n·r/R)
         nθ = ceil(Int, √(n * r / R))
         nϕ = ceil(Int, n / nθ)
