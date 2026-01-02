@@ -1,7 +1,7 @@
 name = "OptimalTransportEncoding"
 uuid = "312e035e-a767-4ce3-8384-49b2c9cb5f83"
-authors = ["Azamat Berdyshev <aberdysh@gmail.com>"]
 version = "0.1.0"
+authors = ["Azamat Berdyshev <aberdysh@gmail.com>"]
 
 [deps]
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
